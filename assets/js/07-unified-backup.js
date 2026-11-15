@@ -62,6 +62,7 @@ function validate(s){
  }
  return {items:s.items,legacy:s.format===LEGACY_FORMAT};
 }
+window.DollhouseValidateUnifiedBackup=validate;
 function downloadBackup(){
  try{
    const data=JSON.stringify(snapshot(),null,2);
