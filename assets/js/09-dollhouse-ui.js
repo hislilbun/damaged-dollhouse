@@ -17,10 +17,10 @@
     window.scrollTo(0,0);
   };
   document.addEventListener('DOMContentLoaded',()=>{
-    const names={daily:'Pretty Little Problems',history:'Lost Time',journals:'Porcelain Pages',directory:'Doll Directory',insights:'Overview & Stats',parts:'Individual Breakdown',backup:'Bandaged Buttons'};
+    const names={daily:'Pretty Little Problems',history:'Lost Time',journals:'Porcelain Pages',directory:'Doll Directory',insights:'Overview & Stats',parts:'Individual Breakdown',backup:'Bandaged Buttons','echo-chamber':'The Echo Chamber'};
     document.querySelectorAll('[data-open]').forEach(button=>button.addEventListener('click',()=>{
       const name=button.dataset.open;
-      if(name==='looking-glass'){tab(name);return}
+      if(name==='looking-glass'||name==='echo-chamber'){tab(name);return}
       const legacy=document.querySelector('.legacy-nav [data-tab="'+name+'"]');
       if(legacy)legacy.click();
     }));

@@ -10,9 +10,18 @@ const KEYS=[
  'bunnie-burrow-preferences-v1',
  'bunnie-burrow-palettes-v1',
  'petal-pages-theme',
- 'damaged-dollhouse-journals-v1'
+ 'damaged-dollhouse-journals-v1',
+ 'damaged-dollhouse-dashboard-scene-v1',
+ 'damaged-dollhouse-character-launch-v1',
+ 'damaged-dollhouse-remembered-workspace-v1',
+ 'damaged-dollhouse-chat-categories-v1',
+ 'damaged-dollhouse-chat-channels-v1',
+ 'damaged-dollhouse-chat-messages-v1',
+ 'damaged-dollhouse-chat-drafts-v1',
+ 'damaged-dollhouse-chat-tombstones-v1'
 ];
-const FORMAT='damaged-dollhouse-unified-v2';
+const FORMAT='damaged-dollhouse-unified-v3';
+const V2_FORMAT='damaged-dollhouse-unified-v2';
 const LEGACY_FORMAT='damaged-dollhouse-unified-v1';
 const $=id=>document.getElementById(id);
 const notice=s=>{$('unifiedMessage').textContent=s};
@@ -23,13 +32,17 @@ function snapshot(){
  return {format:FORMAT,exportedAt:new Date().toISOString(),items};
 }
 function validate(s){
- if(!plain(s)||![FORMAT,LEGACY_FORMAT].includes(s.format)||!plain(s.items))throw Error('Not a supported complete Dollhouse backup');
- const keys=s.format===LEGACY_FORMAT?KEYS.filter(k=>k!=='damaged-dollhouse-journals-v1'):KEYS;
+ if(!plain(s)||![FORMAT,V2_FORMAT,LEGACY_FORMAT].includes(s.format)||!plain(s.items))throw Error('Not a supported complete Dollhouse backup');
+ const keys=s.format===LEGACY_FORMAT?KEYS.slice(0,8):s.format===V2_FORMAT?KEYS.slice(0,9):KEYS;
  if(Object.keys(s.items).length!==keys.length||Object.keys(s.items).some(k=>!keys.includes(k)))throw Error('Backup contains missing or unexpected storage categories');
  for(const key of keys){
    const raw=s.items[key];
    if(raw!==null&&typeof raw!=='string')throw Error('Invalid stored value for '+key);
    if(raw===null)continue;
+   if(key.startsWith('damaged-dollhouse-chat-')){window.DollhouseEchoStore.validate(key,raw);continue;}
+   if(key==='damaged-dollhouse-dashboard-scene-v1'){if(!['daydream','haven','nightmare','off'].includes(raw))throw Error('Invalid dashboard scene');continue;}
+   if(key==='damaged-dollhouse-character-launch-v1'){if(!['ask','remember'].includes(raw))throw Error('Invalid character launch preference');continue;}
+   if(key==='damaged-dollhouse-remembered-workspace-v1'){if(raw.length>200)throw Error('Invalid remembered workspace');continue;}
    if(key==='petal-pages-theme'){
      if(!['light','dark'].includes(raw))throw Error('Invalid theme');
      continue;
@@ -60,7 +73,7 @@ function validate(s){
      if(!plain(value)||Object.entries(value).some(([k,v])=>!k||typeof v!=='string'||!v))throw Error('Invalid profile links');
    }else if(!plain(value))throw Error('Invalid settings or drafts in '+key);
  }
- return {items:s.items,legacy:s.format===LEGACY_FORMAT};
+ return {items:s.items,legacy:s.format===LEGACY_FORMAT,format:s.format};
 }
 window.DollhouseValidateUnifiedBackup=validate;
 function downloadBackup(){
@@ -77,11 +90,11 @@ async function restore(e){
    if(file.size>40*1024*1024)throw Error('Backup file exceeds 40 MB');
    const checked=validate(JSON.parse(await file.text()));
    const items=checked.items;
-   if(!confirm('This will REPLACE all '+(checked.legacy?'eight legacy':'nine')+' Damaged Dollhouse data categories in this browser, including entries, profiles, links, drafts, and settings. It will NOT merge. Have you downloaded a backup of your current data?'))return;
+   if(!confirm('This will REPLACE '+Object.keys(items).length+' categories present in this backup. Categories absent from older backups will be PRESERVED. It will NOT merge existing records within included categories. Have you downloaded a backup of your current data?'))return;
    if(prompt('To replace your current Dollhouse data, type RESTORE:')!=='RESTORE'){notice('Restore canceled; nothing changed.');return}
    const previous={};for(const key of KEYS)previous[key]=localStorage.getItem(key);
    try{
-     for(const key of KEYS){if(checked.legacy&&key==='damaged-dollhouse-journals-v1')continue;if(items[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,items[key]);}
+     for(const key of KEYS){if(!Object.prototype.hasOwnProperty.call(items,key))continue;if(items[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,items[key]);}
    }catch(err){
      let rollbackFailed=false;
      for(const key of KEYS){try{if(previous[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,previous[key])}catch(e){rollbackFailed=true}}

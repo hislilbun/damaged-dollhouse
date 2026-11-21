@@ -1,95 +1,133 @@
-/* v1.8E.1: READ-ONLY safe merge inspection. No writes to localStorage. */
+/* v1.8E.2b: unified comparison, reviewed conflict resolution, mobile backup link. */
 (function(){'use strict';
-const KEYS=['petal-pages-v1','bunnie-burrow-checkins-v1','bunnie-burrow-drafts-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-checkin-profile-links-v1','bunnie-burrow-preferences-v1','bunnie-burrow-palettes-v1','petal-pages-theme','damaged-dollhouse-journals-v1'];
-const LABELS=['Daily entries','Additional check-ins','Drafts','Doll profiles','Check-in profile links','Preferences','Color palettes','Theme','Journals'];
-const MAX=40*1024*1024;
-function canonical(value){if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';return JSON.stringify(value)}
-function read(raw,key){if(raw===null)return null;if(key==='petal-pages-theme')return raw;return JSON.parse(raw)}
-function records(v,key){if(v===null)return new Map();if(Array.isArray(v)){
- const m=new Map();for(let i=0;i<v.length;i++){const item=v[i];const id=item&&typeof item.id==='string'&&item.id?item.id:null;
- // Never guess identity from content or array position. Unidentified records require manual review.
- const k=id?'id:'+id:'unidentified:'+i;if(m.has(k))throw Error('Duplicate record identity in '+key);m.set(k,item)}return m}
- if(v&&typeof v==='object')return new Map(Object.entries(v));return new Map([['value',v]])}
-function compare(a,b,key){const left=records(a,key),right=records(b,key),out={unchanged:0,add:0,retained:0,conflict:0,review:0};
- for(const [id,value] of right){if(id.startsWith('unidentified:')){out.review++;continue}if(!left.has(id)){out.add++;continue}if(canonical(value)===canonical(left.get(id)))out.unchanged++;else out.conflict++}
- for(const id of left.keys())if(!right.has(id))out.retained++;
- // Unidentified current-side records also require manual review.
- for(const id of left.keys())if(id.startsWith('unidentified:'))out.review++;
- return out}
-function show(text){document.getElementById('mergePreviewMessage').textContent=text}
-async function preview(e){const file=e.target.files&&e.target.files[0];if(!file)return;const table=document.getElementById('mergePreviewResults');table.replaceChildren();
- try{if(file.size>MAX)throw Error('Backup exceeds 40 MB');const incoming=JSON.parse(await file.text());
- if(typeof window.DollhouseValidateUnifiedBackup!=='function')throw Error('Unified backup validator unavailable');
- const checked=window.DollhouseValidateUnifiedBackup(incoming);let totals={unchanged:0,add:0,retained:0,conflict:0,review:0};
- const head=document.createElement('tr');for(const s of ['Category','Same','Add','Keep existing','Conflicts','Review']){const th=document.createElement('th');th.textContent=s;head.append(th)}table.append(head);
- KEYS.forEach((key,i)=>{if(checked.legacy&&key==='damaged-dollhouse-journals-v1')return;
- const existingRaw=localStorage.getItem(key);const incomingRaw=checked.items[key];const a=read(existingRaw,key),b=read(incomingRaw,key);
- const result=compare(a,b,key);Object.keys(totals).forEach(k=>totals[k]+=result[k]);const tr=document.createElement('tr');
- for(const value of [LABELS[i],result.unchanged,result.add,result.retained,result.conflict,result.review]){const td=document.createElement('td');td.textContent=String(value);tr.append(td)}table.append(tr)});
- table.hidden=false;show('Read-only preview complete: '+totals.add+' additions, '+totals.unchanged+' unchanged, '+totals.retained+' existing-only, '+totals.conflict+' conflicts, '+totals.review+' needing manual review. Nothing was imported or changed. Settings and drafts are compared conservatively; this is NOT an approval to merge.');
- }catch(err){table.hidden=true;show('⚠ Preview unavailable: '+err.message+'. No data was changed.')}finally{e.target.value=''}}
-window.addEventListener('DOMContentLoaded',()=>{document.getElementById('mergePreviewButton').addEventListener('click',()=>document.getElementById('mergePreviewFile').click());document.getElementById('mergePreviewFile').addEventListener('change',preview)});
-})();
-
-
-/* v1.8E.2: conservative, conflict-blocking, user-confirmed merge. */
-(function(){'use strict';
-const KEYS=['petal-pages-v1','bunnie-burrow-checkins-v1','bunnie-burrow-drafts-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-checkin-profile-links-v1','bunnie-burrow-preferences-v1','bunnie-burrow-palettes-v1','petal-pages-theme','damaged-dollhouse-journals-v1'];
-const ARRAY_KEYS=new Set(['bunnie-burrow-checkins-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-journals-v1']);
+const KEYS=['petal-pages-v1','bunnie-burrow-checkins-v1','bunnie-burrow-drafts-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-checkin-profile-links-v1','bunnie-burrow-preferences-v1','bunnie-burrow-palettes-v1','petal-pages-theme','damaged-dollhouse-journals-v1','damaged-dollhouse-dashboard-scene-v1','damaged-dollhouse-character-launch-v1','damaged-dollhouse-remembered-workspace-v1','damaged-dollhouse-chat-categories-v1','damaged-dollhouse-chat-channels-v1','damaged-dollhouse-chat-messages-v1','damaged-dollhouse-chat-drafts-v1','damaged-dollhouse-chat-tombstones-v1'];
+const LABELS={'petal-pages-v1':'Daily entries','bunnie-burrow-checkins-v1':'Additional check-ins','bunnie-burrow-drafts-v1':'Drafts','damaged-dollhouse-profiles-v1':'Doll profiles','damaged-dollhouse-checkin-profile-links-v1':'Check-in profile links','bunnie-burrow-preferences-v1':'Preferences','bunnie-burrow-palettes-v1':'Color palettes','petal-pages-theme':'Theme','damaged-dollhouse-journals-v1':'Journals'};
+const ARRAY_KEYS=new Set(['bunnie-burrow-checkins-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-journals-v1','damaged-dollhouse-chat-categories-v1','damaged-dollhouse-chat-channels-v1','damaged-dollhouse-chat-messages-v1','damaged-dollhouse-chat-drafts-v1','damaged-dollhouse-chat-tombstones-v1']);
+const LABELS_CHAT={'damaged-dollhouse-chat-categories-v1':'Chat categories','damaged-dollhouse-chat-channels-v1':'Chat channels','damaged-dollhouse-chat-messages-v1':'Chat messages','damaged-dollhouse-chat-drafts-v1':'Chat drafts','damaged-dollhouse-chat-tombstones-v1':'Chat tombstones'};Object.assign(LABELS,LABELS_CHAT);
 const OBJECT_KEYS=new Set(['petal-pages-v1','damaged-dollhouse-checkin-profile-links-v1']);
-const SAFE_NULLABLE=new Set(['bunnie-burrow-drafts-v1','bunnie-burrow-preferences-v1','bunnie-burrow-palettes-v1','petal-pages-theme']);
 const $=id=>document.getElementById(id);
-let pending=null;
 const canonical=x=>JSON.stringify(normalize(x));
-function normalize(x){if(Array.isArray(x))return x.map(normalize);if(x&&typeof x==='object'){const o={};Object.keys(x).sort().forEach(k=>o[k]=normalize(x[k]));return o}return x}
+function normalize(x){if(Array.isArray(x))return x.map(normalize);if(x&&typeof x==='object'){const o=Object.create(null);Object.keys(x).sort().forEach(k=>Object.defineProperty(o,k,{value:normalize(x[k]),enumerable:true,writable:true,configurable:true}));return o}return x}
 function parsed(raw,key){return raw===null?null:key==='petal-pages-theme'?raw:JSON.parse(raw)}
-function build(incoming,current){const output={},counts={added:0,unchanged:0,retained:0},issues=[];
+function conflictKey(key,id){return JSON.stringify([key,id])}
+let pending=null, backupUrl=null;
+function clearBackup(){if(backupUrl){URL.revokeObjectURL(backupUrl);backupUrl=null}$('mergeBackupReady').hidden=true;$('mergeBackupVerified').checked=false;if(pending){pending.downloaded=false;pending.snapshotFingerprint=null}}
+function snapshot(){const items={};for(const key of KEYS)items[key]=localStorage.getItem(key);return {format:'damaged-dollhouse-unified-v3',exportedAt:new Date().toISOString(),items}}
+function build(incoming,current,choices={}){
+ const output={},counts={added:0,unchanged:0,retained:0,conflicts:0,resolved:0},conflicts=[],issues=[],byCategory={};
+ function resolve(key,id,left,right,apply){const ck=conflictKey(key,id),choice=choices[ck];counts.conflicts++;conflicts.push({key,id,left,right,ck,choice});if(choice==='incoming'){apply(right);counts.resolved++}else if(choice==='existing'){counts.resolved++}}
  for(const key of KEYS){if(!Object.prototype.hasOwnProperty.call(incoming,key))continue;
- const oldRaw=current[key],newRaw=incoming[key];let a,b;
- try{a=parsed(oldRaw,key);b=parsed(newRaw,key)}catch(e){issues.push(key+': invalid current data');continue}
- if(ARRAY_KEYS.has(key)){
-   if(a!==null&&!Array.isArray(a)){issues.push(key+': invalid current collection');continue}
-   if(b!==null&&!Array.isArray(b)){issues.push(key+': invalid incoming collection');continue}
-   const left=a||[],right=b||[],seen=new Map(),result=left.slice();let bad=false;
-   for(const item of left){if(!item||typeof item.id!=='string'||!item.id||seen.has(item.id)){issues.push(key+': existing record missing/duplicate ID');bad=true;break}seen.set(item.id,item)}
+  const before={...counts};
+  const oldRaw=current[key],newRaw=incoming[key];let a,b;
+  try{a=parsed(oldRaw,key);b=parsed(newRaw,key)}catch(e){issues.push(key+': invalid current or incoming data');continue}
+  if(ARRAY_KEYS.has(key)){
+   if(a!==null&&!Array.isArray(a)||b!==null&&!Array.isArray(b)){issues.push(key+': invalid collection');continue}
+   const left=a||[],right=b||[],result=left.slice(),seen=new Map(),incomingIds=new Set();let bad=false;
+   for(let i=0;i<left.length;i++){const item=left[i];if(!item||typeof item.id!=='string'||!item.id||seen.has(item.id)){issues.push(key+': existing record missing/duplicate ID');bad=true;break}seen.set(item.id,i)}
    if(bad)continue;
-   const incomingIds=new Set();for(const item of right){if(!item||typeof item.id!=='string'||!item.id||incomingIds.has(item.id)){issues.push(key+': incoming record missing/duplicate ID');bad=true;break}incomingIds.add(item.id);
-     if(!seen.has(item.id)){result.push(item);counts.added++}else if(canonical(seen.get(item.id))===canonical(item))counts.unchanged++;else issues.push(key+': conflicting record ID '+item.id)}
+   for(const item of right){if(!item||typeof item.id!=='string'||!item.id||incomingIds.has(item.id)){issues.push(key+': incoming record missing/duplicate ID');bad=true;break}incomingIds.add(item.id);
+    if(!seen.has(item.id)){result.push(item);counts.added++}else{const i=seen.get(item.id);if(canonical(result[i])===canonical(item))counts.unchanged++;else resolve(key,item.id,result[i],item,value=>result[i]=value)}}
    if(bad)continue;
    for(const item of left)if(!incomingIds.has(item.id))counts.retained++;
    output[key]=oldRaw===null&&newRaw===null?null:JSON.stringify(result);
- }else if(OBJECT_KEYS.has(key)){
+  }else if(OBJECT_KEYS.has(key)){
    if(a!==null&&(typeof a!=='object'||Array.isArray(a))||b!==null&&(typeof b!=='object'||Array.isArray(b))){issues.push(key+': invalid object');continue}
-   const left=a||{},right=b||{},result={...left};
-   for(const [id,item] of Object.entries(right)){if(!Object.prototype.hasOwnProperty.call(left,id)){result[id]=item;counts.added++}else if(canonical(left[id])===canonical(item))counts.unchanged++;else issues.push(key+': conflicting key '+id)}
+   const left=a||{},right=b||{},result=Object.assign(Object.create(null),left);
+   for(const [id,item] of Object.entries(right)){if(['__proto__','constructor','prototype'].includes(id)){issues.push(key+': unsafe record key '+id);continue}if(!Object.prototype.hasOwnProperty.call(left,id)){result[id]=item;counts.added++}else if(canonical(left[id])===canonical(item))counts.unchanged++;else resolve(key,id,left[id],item,value=>result[id]=value)}
    for(const id of Object.keys(left))if(!Object.prototype.hasOwnProperty.call(right,id))counts.retained++;
    output[key]=oldRaw===null&&newRaw===null?null:JSON.stringify(result);
- }else if(SAFE_NULLABLE.has(key)){
+  }else{
    if(oldRaw===null){output[key]=newRaw;if(newRaw!==null)counts.added++}
    else if(newRaw===null){output[key]=oldRaw;counts.retained++}
    else if(canonical(a)===canonical(b)){output[key]=oldRaw;counts.unchanged++}
-   else{issues.push(key+': different settings/draft data; manual review required');output[key]=oldRaw}
+   else{output[key]=oldRaw;resolve(key,'whole-category',a,b,value=>output[key]=newRaw)}
+  }
+  byCategory[key]={added:counts.added-before.added,unchanged:counts.unchanged-before.unchanged,retained:counts.retained-before.retained,conflicts:counts.conflicts-before.conflicts};
  }
- }
- return {output,counts,issues};
+ 
+ // Reject newly introduced dangling references. Existing historical orphan references
+ // are reported separately by the app; this guard does not erase or rewrite them.
+ try {
+  const profiles=JSON.parse(output['damaged-dollhouse-profiles-v1']??current['damaged-dollhouse-profiles-v1']??'[]');
+  const profileIds=new Set(profiles.map(p=>p.id));
+  const previousProfiles=JSON.parse(current['damaged-dollhouse-profiles-v1']??'[]');
+  const previousIds=new Set(previousProfiles.map(p=>p.id));
+  const journals=JSON.parse(output['damaged-dollhouse-journals-v1']??current['damaged-dollhouse-journals-v1']??'[]');
+  const oldJournals=JSON.parse(current['damaged-dollhouse-journals-v1']??'[]');
+  const oldJournalById=new Map(oldJournals.map(j=>[j.id,j]));
+  for(const j of journals){
+   if(j.authorId && !profileIds.has(j.authorId) &&
+      (!oldJournalById.has(j.id) || oldJournalById.get(j.id).authorId!==j.authorId))
+     issues.push('Journal '+j.id+' references missing profile '+j.authorId);
+  }
+  const links=JSON.parse(output['damaged-dollhouse-checkin-profile-links-v1']??current['damaged-dollhouse-checkin-profile-links-v1']??'{}');
+  const oldLinks=JSON.parse(current['damaged-dollhouse-checkin-profile-links-v1']??'{}');
+  for(const [id,profileId] of Object.entries(links))
+   if(!profileIds.has(profileId) && oldLinks[id]!==profileId)
+    issues.push('Check-in link '+id+' references missing profile '+profileId);
+ }catch(e){issues.push('Unable to verify merged profile references: '+e.message)}
+ try{
+  const get=(key)=>JSON.parse(output[key]??current[key]??'[]');
+  const cats=new Set(get('damaged-dollhouse-chat-categories-v1').map(x=>x.id));
+  const chans=get('damaged-dollhouse-chat-channels-v1');const channelIds=new Set(chans.map(x=>x.id));
+  const oldChannels=new Map(JSON.parse(current['damaged-dollhouse-chat-channels-v1']??'[]').map(x=>[x.id,x]));
+  for(const c of chans)if(!cats.has(c.categoryId)&&(!oldChannels.has(c.id)||oldChannels.get(c.id).categoryId!==c.categoryId))issues.push('Chat channel '+c.id+' has missing category');
+  const profiles=new Set(JSON.parse(output['damaged-dollhouse-profiles-v1']??current['damaged-dollhouse-profiles-v1']??'[]').map(x=>x.id));
+  const oldMsgs=new Map(JSON.parse(current['damaged-dollhouse-chat-messages-v1']??'[]').map(x=>[x.id,x]));
+  const tombs=new Set(get('damaged-dollhouse-chat-tombstones-v1').map(x=>x.messageId));
+  const messages=get('damaged-dollhouse-chat-messages-v1');
+  for(const m of messages){
+   if(tombs.has(m.id))issues.push('Deleted message '+m.id+' cannot be automatically restored from backup');
+   if(!channelIds.has(m.channelId)&&(!oldMsgs.has(m.id)||oldMsgs.get(m.id).channelId!==m.channelId))issues.push('Message '+m.id+' references missing channel');
+   for(const pid of m.author.profileIds)if(!profiles.has(pid)&&(!oldMsgs.has(m.id)||JSON.stringify(oldMsgs.get(m.id).author)!==JSON.stringify(m.author)))issues.push('Message '+m.id+' references missing author '+pid);
+  }
+  const oldDrafts=new Map(JSON.parse(current['damaged-dollhouse-chat-drafts-v1']??'[]').map(x=>[x.id,x]));
+  for(const d of get('damaged-dollhouse-chat-drafts-v1'))if(!channelIds.has(d.channelId)&&(!oldDrafts.has(d.id)||oldDrafts.get(d.id).channelId!==d.channelId))issues.push('Draft '+d.id+' references missing channel');
+ }catch(e){issues.push('Unable to verify chat references: '+e.message)}
+ return {output,counts,conflicts,issues,byCategory};
 }
 function say(s){$('mergeCommitMessage').textContent=s}
-function download(obj){const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='damaged-dollhouse-PRE-MERGE-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000)}
-function snapshot(){const items={};for(const key of KEYS)items[key]=localStorage.getItem(key);return {format:'damaged-dollhouse-unified-v2',exportedAt:new Date().toISOString(),items}}
-function refresh(){const now=snapshot(),plan=build(pending.incoming,now.items);if(plan.issues.length)throw Error('Merge blocked: '+plan.issues.length+' conflict(s) or unsupported records. '+plan.issues.slice(0,3).join('; '));return {now,plan}}
-async function select(e){const f=e.target.files?.[0];pending=null;$('mergeCommitButton').disabled=true;$('mergeSnapshotButton').disabled=true;
- try{if(!f)return;if(f.size>40*1024*1024)throw Error('Backup exceeds 40 MB');const raw=JSON.parse(await f.text()),validated=window.DollhouseValidateUnifiedBackup(raw);const incoming={...validated.items};if(validated.legacy)delete incoming['damaged-dollhouse-journals-v1'];pending={incoming,downloaded:false};const {plan}=refresh();
- say('Ready to merge: '+plan.counts.added+' additions, '+plan.counts.unchanged+' identical, '+plan.counts.retained+' retained-only. First download and KEEP the pre-merge snapshot, then confirm the merge.');$('mergeSnapshotButton').disabled=false;
- }catch(err){pending=null;say('⚠ '+err.message)}finally{e.target.value=''}
+function prepareDownload(obj){
+ const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+ backupUrl=URL.createObjectURL(blob);
+ const a=$('mergeBackupLink');a.href=backupUrl;a.download='damaged-dollhouse-PRE-MERGE-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
+ $('mergeBackupReady').hidden=false;
 }
-function saveSnapshot(){if(!pending)return;try{refresh();download(snapshot());pending.downloaded=true;$('mergeCommitButton').disabled=false;say('Pre-merge snapshot download initiated. Confirm it actually saved before continuing. Click Merge only after you have verified the downloaded file.')}catch(e){say('⚠ '+e.message)}}
-function commit(){if(!pending||!pending.downloaded)return;let old;
- try{const {now,plan}=refresh();old=now.items;if(!confirm('MERGE '+plan.counts.added+' new records into this browser? Existing-only records stay. No conflicting records will be overwritten. Verify your PRE-MERGE backup was downloaded first.'))return;
+function refresh(){if(!pending)throw Error('Select a backup first');const now=snapshot(),plan=build(pending.incoming,now.items,pending.choices);return {now,plan}}
+function updateButtons(plan){$('mergeSnapshotButton').disabled=!pending||plan.issues.length>0||plan.conflicts.some(c=>!c.choice);$('mergeCommitButton').disabled=$('mergeSnapshotButton').disabled||!pending.downloaded||!$('mergeBackupVerified').checked}
+function render(){const {plan}=refresh(),wrap=$('mergeConflictList');wrap.replaceChildren();
+ const holder=$('mergeComparisonResults');holder.replaceChildren();const table=document.createElement('table');table.style.cssText='width:100%;font-size:.9em;text-align:left';
+ const header=document.createElement('tr');for(const label of ['Category','Same','Add','Keep existing','Conflicts']){const th=document.createElement('th');th.textContent=label;header.append(th)}table.append(header);
+ for(const [key,counts] of Object.entries(plan.byCategory)){const row=document.createElement('tr');for(const value of [LABELS[key],counts.unchanged,counts.added,counts.retained,counts.conflicts]){const td=document.createElement('td');td.textContent=String(value);row.append(td)}table.append(row)}holder.append(table);
+
+ for(const c of plan.conflicts){const section=document.createElement('div');section.className='note';section.style.margin='12px 0';const title=document.createElement('strong');title.textContent=c.key+' · '+c.id;section.append(title);
+ const detail=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Compare both versions';detail.append(summary);
+ for(const [label,value] of [['Existing',c.left],['Incoming',c.right]]){const h=document.createElement('strong');h.textContent=label;const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;font-size:12px';pre.textContent=JSON.stringify(value,null,2);detail.append(h,pre)}section.append(detail);
+ const label=document.createElement('label');label.textContent='Resolution: ';const sel=document.createElement('select');sel.setAttribute('aria-label','Resolution for '+c.key+' '+c.id);
+ for(const [value,text] of [['','Choose a resolution'],['existing','Keep existing version'],['incoming','Use incoming version']]){const opt=document.createElement('option');opt.value=value;opt.textContent=text;sel.append(opt)}sel.value=c.choice||'';
+ sel.addEventListener('change',()=>{pending.choices[c.ck]=sel.value;clearBackup();render()});label.append(sel);section.append(label);wrap.append(section)}
+ const unresolved=plan.conflicts.filter(c=>!c.choice).length;
+ say('Comparison: '+plan.counts.added+' additions, '+plan.counts.unchanged+' identical, '+plan.counts.retained+' existing-only, '+plan.conflicts.length+' conflicts ('+unresolved+' unresolved). '+(plan.issues.length?'BLOCKED: '+plan.issues.join('; '):unresolved?'Choose a resolution for every conflict.':'Ready for a pre-merge backup. Nothing has been changed.'));
+ updateButtons(plan);
+}
+async function select(e){clearBackup();pending=null;$('mergeConflictList').replaceChildren();$('mergeSnapshotButton').disabled=true;$('mergeCommitButton').disabled=true;
+ try{const f=e.target.files?.[0];if(!f)return;if(f.size>40*1024*1024)throw Error('Backup exceeds 40 MB');const raw=JSON.parse(await f.text()),validated=window.DollhouseValidateUnifiedBackup(raw),incoming={...validated.items};for(const key of KEYS)if(!Object.prototype.hasOwnProperty.call(incoming,key))delete incoming[key];pending={incoming,choices:{},downloaded:false};render()}
+ catch(err){pending=null;say('⚠ '+err.message)}finally{e.target.value=''}
+}
+function saveSnapshot(){if(!pending)return;try{const {now,plan}=refresh();if(plan.issues.length||plan.conflicts.some(c=>!c.choice))throw Error('Resolve all conflicts first');clearBackup();prepareDownload(now);pending.downloaded=true;pending.snapshotFingerprint=JSON.stringify(now.items);updateButtons(plan);say('Safety backup is ready. Tap the Save PRE-MERGE backup file link, verify it saved, then check the confirmation box to enable merging. Nothing has changed.')}catch(e){say('⚠ '+e.message)}}
+function commit(){if(!pending||!pending.downloaded)return;
+ try{const {now,plan}=refresh();if(plan.issues.length||plan.conflicts.some(c=>!c.choice))throw Error('Merge blocked: unresolved conflicts or invalid records');if(plan.issues.length===0){
+  const candidate={format:'damaged-dollhouse-unified-v3',items:{...now.items,...plan.output}};
+  window.DollhouseValidateUnifiedBackup(candidate);
+ }
+ if(JSON.stringify(now.items)!==pending.snapshotFingerprint)throw Error('Browser data changed since the safety backup. Download a new pre-merge backup before continuing.');
+ if(!confirm('Merge '+plan.counts.added+' new records and apply '+plan.counts.resolved+' explicit conflict decisions? Verify your PRE-MERGE backup was downloaded.'))return;
  if(prompt('Type MERGE to proceed:')!=='MERGE'){say('Merge canceled.');return}
- const changed=KEYS.filter(k=>Object.prototype.hasOwnProperty.call(plan.output,k)&&plan.output[k]!==old[k]);
- try{for(const key of changed){const v=plan.output[key];if(v===null)localStorage.removeItem(key);else localStorage.setItem(key,v)}for(const key of changed)if(localStorage.getItem(key)!==plan.output[key])throw Error('Post-write verification failed for '+key)}catch(e){let failed=false;for(const key of changed){try{if(old[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,old[key])}catch(_){failed=true}}throw Error(failed?'Merge failed and rollback was incomplete. Use your PRE-MERGE backup; do not continue editing.':'Merge failed; rollback attempted. '+e.message)}
- pending=null;$('mergeCommitButton').disabled=true;$('mergeSnapshotButton').disabled=true;say('♡ Merge completed and verified for '+changed.length+' storage categories. Reloading…');location.reload();
+ const old=now.items,changed=KEYS.filter(k=>Object.prototype.hasOwnProperty.call(plan.output,k)&&plan.output[k]!==old[k]);
+ try{for(const key of changed){const v=plan.output[key];if(v===null)localStorage.removeItem(key);else localStorage.setItem(key,v)}for(const key of changed)if(localStorage.getItem(key)!==plan.output[key])throw Error('Post-write verification failed for '+key)}
+ catch(e){let failed=false;for(const key of changed){try{if(old[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,old[key])}catch(_){failed=true}}throw Error(failed?'Merge failed and rollback incomplete. Restore your PRE-MERGE backup.':'Merge failed; rollback attempted. '+e.message)}
+ clearBackup();pending=null;$('mergeCommitButton').disabled=true;$('mergeSnapshotButton').disabled=true;say('Merge complete. Reloading…');location.reload();
  }catch(e){say('⚠ '+e.message)}
 }
-window.addEventListener('DOMContentLoaded',()=>{$('mergeCommitSelect').addEventListener('click',()=>$('mergeCommitFile').click());$('mergeCommitFile').addEventListener('change',select);$('mergeSnapshotButton').addEventListener('click',saveSnapshot);$('mergeCommitButton').addEventListener('click',commit)});
+window.addEventListener('DOMContentLoaded',()=>{$('mergeCommitSelect').addEventListener('click',()=>$('mergeCommitFile').click());$('mergeCommitFile').addEventListener('change',select);$('mergeSnapshotButton').addEventListener('click',saveSnapshot);$('mergeCommitButton').addEventListener('click',commit);$('mergeBackupVerified').addEventListener('change',()=>{if(pending)updateButtons(refresh().plan)})});
 })();
