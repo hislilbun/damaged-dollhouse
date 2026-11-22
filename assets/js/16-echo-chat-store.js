@@ -7,7 +7,7 @@ const str=(x,max=100000)=>typeof x==='string'&&x.length<=max;
 const id=x=>str(x,150)&&!!x;
 function validate(key,raw){if(raw===null)return;let data;try{data=JSON.parse(raw)}catch(_){throw Error('Invalid JSON in '+key)}
  if(!Array.isArray(data)||data.length>50000)throw Error('Invalid Echo Chamber collection: '+key);
- const ids=new Set();for(const v of data){if(!isObj(v)||!id(v.id)||ids.has(v.id))throw Error('Invalid or duplicate Echo Chamber ID in '+key);ids.add(v.id);
+ const ids=new Set();for(const v of data){if(!isObj(v)||!id(v.id)||ids.has(v.id))throw Error('Invalid or duplicate Echo Chamber ID in '+key);ids.add(v.id);if(v.deletedAt!==undefined&&v.deletedAt!==null&&(!str(v.deletedAt,40)||!Number.isFinite(Date.parse(v.deletedAt))))throw Error('Invalid chat deletion timestamp');
  if(key===KEYS.categories){if(!str(v.name,100)||!v.name.trim()||!Number.isFinite(v.order)||typeof v.archived!=='boolean')throw Error('Invalid chat category')}
  if(key===KEYS.channels){if(!str(v.name,100)||!v.name.trim()||!id(v.categoryId)||!Number.isFinite(v.order)||typeof v.archived!=='boolean')throw Error('Invalid chat channel')}
  if(key===KEYS.messages){if(!id(v.channelId)||!str(v.body,20000)||!v.body.trim()||!str(v.createdAt,40)||!isObj(v.author)||!['shared','profiles'].includes(v.author.type)||!Array.isArray(v.author.profileIds)||v.author.profileIds.some(x=>!id(x))||new Set(v.author.profileIds).size!==v.author.profileIds.length||(v.author.type==='shared'&&v.author.profileIds.length!==0)||(v.author.type==='profiles'&&v.author.profileIds.length===0))throw Error('Invalid chat message')}
