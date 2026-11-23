@@ -561,3 +561,10 @@ header .character-session-switch:hover{background:var(--field);border-color:var(
   .character-session-subtitle{letter-spacing:.05em;}
 }
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto!important;}}
+
+/* SC-1.2: stacked, rounded appearance controls, consistent across scenes */
+header .header-controls{flex-direction:column!important;align-items:flex-end!important;gap:6px!important}
+header .header-controls .theme-toggle{border-radius:999px!important;min-width:108px;justify-content:center;padding:7px 14px;font-size:.82rem}
+.directory-visibility-option{display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600}
+.directory-visibility-option input{width:18px;height:18px;flex:0 0 auto}
+@media(max-width:700px){header .header-controls{width:auto!important;align-self:flex-end!important;align-items:flex-end!important;order:2}header .header-controls .theme-toggle{min-height:40px}}

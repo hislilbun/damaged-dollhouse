@@ -1,9 +1,9 @@
 /* v1.8E.2b: unified comparison, reviewed conflict resolution, mobile backup link. */
 (function(){'use strict';
-const KEYS=['petal-pages-v1','bunnie-burrow-checkins-v1','bunnie-burrow-drafts-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-checkin-profile-links-v1','bunnie-burrow-preferences-v1','bunnie-burrow-palettes-v1','petal-pages-theme','damaged-dollhouse-journals-v1','damaged-dollhouse-dashboard-scene-v1','damaged-dollhouse-character-launch-v1','damaged-dollhouse-remembered-workspace-v1','damaged-dollhouse-chat-categories-v1','damaged-dollhouse-chat-channels-v1','damaged-dollhouse-chat-messages-v1','damaged-dollhouse-chat-drafts-v1','damaged-dollhouse-chat-tombstones-v1'];
+const KEYS=['petal-pages-v1','bunnie-burrow-checkins-v1','bunnie-burrow-drafts-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-checkin-profile-links-v1','bunnie-burrow-preferences-v1','bunnie-burrow-palettes-v1','petal-pages-theme','damaged-dollhouse-journals-v1','damaged-dollhouse-dashboard-scene-v1','damaged-dollhouse-character-launch-v1','damaged-dollhouse-remembered-workspace-v1','damaged-dollhouse-chat-categories-v1','damaged-dollhouse-chat-channels-v1','damaged-dollhouse-chat-messages-v1','damaged-dollhouse-chat-drafts-v1','damaged-dollhouse-chat-tombstones-v1','damaged-dollhouse-chat-reads-v1'];
 const LABELS={'petal-pages-v1':'Daily entries','bunnie-burrow-checkins-v1':'Additional check-ins','bunnie-burrow-drafts-v1':'Drafts','damaged-dollhouse-profiles-v1':'Doll profiles','damaged-dollhouse-checkin-profile-links-v1':'Check-in profile links','bunnie-burrow-preferences-v1':'Preferences','bunnie-burrow-palettes-v1':'Color palettes','petal-pages-theme':'Theme','damaged-dollhouse-journals-v1':'Journals'};
-const ARRAY_KEYS=new Set(['bunnie-burrow-checkins-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-journals-v1','damaged-dollhouse-chat-categories-v1','damaged-dollhouse-chat-channels-v1','damaged-dollhouse-chat-messages-v1','damaged-dollhouse-chat-drafts-v1','damaged-dollhouse-chat-tombstones-v1']);
-const LABELS_CHAT={'damaged-dollhouse-chat-categories-v1':'Chat categories','damaged-dollhouse-chat-channels-v1':'Chat channels','damaged-dollhouse-chat-messages-v1':'Chat messages','damaged-dollhouse-chat-drafts-v1':'Chat drafts','damaged-dollhouse-chat-tombstones-v1':'Chat tombstones'};Object.assign(LABELS,LABELS_CHAT);
+const ARRAY_KEYS=new Set(['bunnie-burrow-checkins-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-journals-v1','damaged-dollhouse-chat-categories-v1','damaged-dollhouse-chat-channels-v1','damaged-dollhouse-chat-messages-v1','damaged-dollhouse-chat-drafts-v1','damaged-dollhouse-chat-tombstones-v1','damaged-dollhouse-chat-reads-v1']);
+const LABELS_CHAT={'damaged-dollhouse-chat-categories-v1':'Chat categories','damaged-dollhouse-chat-channels-v1':'Chat channels','damaged-dollhouse-chat-messages-v1':'Chat messages','damaged-dollhouse-chat-drafts-v1':'Chat drafts','damaged-dollhouse-chat-tombstones-v1':'Chat tombstones','damaged-dollhouse-chat-reads-v1':'Chat read markers'};Object.assign(LABELS,LABELS_CHAT);
 const OBJECT_KEYS=new Set(['petal-pages-v1','damaged-dollhouse-checkin-profile-links-v1']);
 const $=id=>document.getElementById(id);
 const canonical=x=>JSON.stringify(normalize(x));
@@ -12,7 +12,7 @@ function parsed(raw,key){return raw===null?null:key==='petal-pages-theme'?raw:JS
 function conflictKey(key,id){return JSON.stringify([key,id])}
 let pending=null, backupUrl=null;
 function clearBackup(){if(backupUrl){URL.revokeObjectURL(backupUrl);backupUrl=null}$('mergeBackupReady').hidden=true;$('mergeBackupVerified').checked=false;if(pending){pending.downloaded=false;pending.snapshotFingerprint=null}}
-function snapshot(){const items={};for(const key of KEYS)items[key]=localStorage.getItem(key);return {format:'damaged-dollhouse-unified-v3',exportedAt:new Date().toISOString(),items}}
+function snapshot(){const items={};for(const key of KEYS)items[key]=localStorage.getItem(key);return {format:'damaged-dollhouse-unified-v4',exportedAt:new Date().toISOString(),items}}
 function build(incoming,current,choices={}){
  const output={},counts={added:0,unchanged:0,retained:0,conflicts:0,resolved:0},conflicts=[],issues=[],byCategory={};
  function resolve(key,id,left,right,apply){const ck=conflictKey(key,id),choice=choices[ck];counts.conflicts++;conflicts.push({key,id,left,right,ck,choice});if(choice==='incoming'){apply(right);counts.resolved++}else if(choice==='existing'){counts.resolved++}}
@@ -117,7 +117,7 @@ async function select(e){clearBackup();pending=null;$('mergeConflictList').repla
 function saveSnapshot(){if(!pending)return;try{const {now,plan}=refresh();if(plan.issues.length||plan.conflicts.some(c=>!c.choice))throw Error('Resolve all conflicts first');clearBackup();prepareDownload(now);pending.downloaded=true;pending.snapshotFingerprint=JSON.stringify(now.items);updateButtons(plan);say('Safety backup is ready. Tap the Save PRE-MERGE backup file link, verify it saved, then check the confirmation box to enable merging. Nothing has changed.')}catch(e){say('⚠ '+e.message)}}
 function commit(){if(!pending||!pending.downloaded)return;
  try{const {now,plan}=refresh();if(plan.issues.length||plan.conflicts.some(c=>!c.choice))throw Error('Merge blocked: unresolved conflicts or invalid records');if(plan.issues.length===0){
-  const candidate={format:'damaged-dollhouse-unified-v3',items:{...now.items,...plan.output}};
+  const candidate={format:'damaged-dollhouse-unified-v4',items:{...now.items,...plan.output}};
   window.DollhouseValidateUnifiedBackup(candidate);
  }
  if(JSON.stringify(now.items)!==pending.snapshotFingerprint)throw Error('Browser data changed since the safety backup. Download a new pre-merge backup before continuing.');

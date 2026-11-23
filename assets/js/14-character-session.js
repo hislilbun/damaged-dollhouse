@@ -18,7 +18,7 @@ function roster(){
  }catch(e){return {profiles:[],safe:false}}
 }
 function validWorkspace(id,r=roster()){
- return id===SHARED||(r.safe&&validId(id)&&r.profiles.some(p=>p.id===id));
+ return id===SHARED||(r.safe&&validId(id)&&r.profiles.some(p=>p.id===id&&p.showInCharacterSelect!==false));
 }
 function read(key){try{return localStorage.getItem(key)}catch(e){return null}}
 function write(key,value){try{localStorage.setItem(key,value);return true}catch(e){return false}}
@@ -40,8 +40,9 @@ function show(reason){
 function render(){
  const r=roster(), list=$('characterSessionChoices');list.replaceChildren();
  const warning=$('characterSessionWarning');warning.textContent=r.safe?'':'⚠ Doll Directory could not be read. Existing profiles are not being changed. Restore your directory data before selecting a doll.';
- if(!r.profiles.length){const msg=document.createElement('p');msg.className='character-session-empty';msg.textContent='No active dolls yet. Enter as Shared, then create or restore profiles in Doll Directory.';list.append(msg)}
- for(const p of r.profiles){
+ const visibleProfiles=r.profiles.filter(p=>p.showInCharacterSelect!==false);
+ if(!visibleProfiles.length){const msg=document.createElement('p');msg.className='character-session-empty';msg.textContent='No dolls enabled for Character Select. Enter as Shared, or enable a doll in the Doll Directory.';list.append(msg)}
+ for(const p of visibleProfiles){
   const b=document.createElement('button');b.type='button';b.className='character-session-choice character-session-doll';
   const avatar=document.createElement('span');avatar.className='character-session-mini-avatar';avatar.textContent=p.emoji||'♡';avatar.setAttribute('aria-hidden','true');
   const name=document.createElement('span');name.className='character-session-mini-name';name.textContent=p.name;b.append(avatar,name);

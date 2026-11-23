@@ -18,9 +18,11 @@ const KEYS=[
  'damaged-dollhouse-chat-channels-v1',
  'damaged-dollhouse-chat-messages-v1',
  'damaged-dollhouse-chat-drafts-v1',
- 'damaged-dollhouse-chat-tombstones-v1'
+ 'damaged-dollhouse-chat-tombstones-v1',
+ 'damaged-dollhouse-chat-reads-v1'
 ];
-const FORMAT='damaged-dollhouse-unified-v3';
+const FORMAT='damaged-dollhouse-unified-v4';
+const V3_FORMAT='damaged-dollhouse-unified-v3';
 const V2_FORMAT='damaged-dollhouse-unified-v2';
 const LEGACY_FORMAT='damaged-dollhouse-unified-v1';
 const $=id=>document.getElementById(id);
@@ -32,8 +34,8 @@ function snapshot(){
  return {format:FORMAT,exportedAt:new Date().toISOString(),items};
 }
 function validate(s){
- if(!plain(s)||![FORMAT,V2_FORMAT,LEGACY_FORMAT].includes(s.format)||!plain(s.items))throw Error('Not a supported complete Dollhouse backup');
- const keys=s.format===LEGACY_FORMAT?KEYS.slice(0,8):s.format===V2_FORMAT?KEYS.slice(0,9):KEYS;
+ if(!plain(s)||![FORMAT,V3_FORMAT,V2_FORMAT,LEGACY_FORMAT].includes(s.format)||!plain(s.items))throw Error('Not a supported complete Dollhouse backup');
+ const keys=s.format===LEGACY_FORMAT?KEYS.slice(0,8):s.format===V2_FORMAT?KEYS.slice(0,9):s.format===V3_FORMAT?KEYS.slice(0,17):KEYS;
  if(Object.keys(s.items).length!==keys.length||Object.keys(s.items).some(k=>!keys.includes(k)))throw Error('Backup contains missing or unexpected storage categories');
  for(const key of keys){
    const raw=s.items[key];
