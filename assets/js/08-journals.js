@@ -17,7 +17,7 @@ function refreshWorkspaceFilter(reset=false){
  if(current!=='shared'){const p=all.find(x=>x.id===current&&!x.archived);if(p)select.add(new Option('Current doll: '+(p.emoji||'♡')+' '+p.name,'doll:'+p.id))}
  select.add(new Option('Shared entries','shared'));select.add(new Option('Unassigned author','unassigned'));
  // Keep an explicit profile view available if the roster changed or the user selected it previously.
- if(previous.startsWith('doll:')&&!Array.from(select.options).some(o=>o.value===previous)){const id=previous.slice(5),p=all.find(x=>x.id===id);if(p)select.add(new Option('Doll: '+p.name+(p.archived?' (archived)':''),previous))}
+ if(previous.startsWith('doll:')&&!Array.from(select.options).some(o=>o.value===previous)){const id=previous.slice(5),p=all.find(x=>x.id===id);if(p)select.add(new Option('Doll: '+p.name+(p.archived?' (archived)':p.showInCharacterSelect===false?' (inactive)':''),previous))}
  workspaceFilter=Array.from(select.options).some(o=>o.value===previous)?previous:'all';select.value=workspaceFilter;
  $('journalWorkspaceHint').textContent='View only · '+(workspaceFilter==='all'?'all journal entries remain accessible':workspaceFilter==='shared'?'entries marked Shared':workspaceFilter==='unassigned'?'entries with no assigned author':'entries explicitly attributed to this doll')+'. This does not change authorship or fronting.';
 }
@@ -35,7 +35,7 @@ function message(t){$('journalMessage').textContent=t}
 function persist(next){try{localStorage.setItem(KEY,JSON.stringify(next));entries=next;return true}catch(err){message('⚠ Could not save: '+err.message);return false}}
 function refreshAuthors(selected=''){
  const el=$('journalAuthor');el.replaceChildren();const base=document.createElement('option');base.value='';base.textContent='Unassigned / unknown';el.append(base);
- for(const p of profiles()){const o=document.createElement('option');o.value=p.id;o.textContent=(p.emoji||'')+' '+p.name+(p.archived?' (archived)':'');el.append(o)}
+ for(const p of profiles().filter(p=>(!p.archived&&p.showInCharacterSelect!==false)||p.id===selected)){const o=document.createElement('option');o.value=p.id;o.textContent=(p.emoji||'')+' '+p.name+(p.archived?' (archived)':p.showInCharacterSelect===false?' (inactive)':'');el.append(o)}
  if(selected&&!profiles().some(p=>p.id===selected)){const o=document.createElement('option');o.value=selected;o.textContent='Unknown / removed profile';el.append(o)}
  el.value=selected;
 }
