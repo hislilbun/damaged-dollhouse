@@ -5,10 +5,12 @@ const LABELS={'petal-pages-v1':'Daily entries','bunnie-burrow-checkins-v1':'Addi
 const ARRAY_KEYS=new Set(['bunnie-burrow-checkins-v1','damaged-dollhouse-profiles-v1','damaged-dollhouse-journals-v1','damaged-dollhouse-chat-categories-v1','damaged-dollhouse-chat-channels-v1','damaged-dollhouse-chat-messages-v1','damaged-dollhouse-chat-drafts-v1','damaged-dollhouse-chat-tombstones-v1','damaged-dollhouse-chat-reads-v1']);
 const LABELS_CHAT={'damaged-dollhouse-chat-categories-v1':'Chat categories','damaged-dollhouse-chat-channels-v1':'Chat channels','damaged-dollhouse-chat-messages-v1':'Chat messages','damaged-dollhouse-chat-drafts-v1':'Chat drafts','damaged-dollhouse-chat-tombstones-v1':'Chat tombstones','damaged-dollhouse-chat-reads-v1':'Chat read markers'};Object.assign(LABELS,LABELS_CHAT);
 const OBJECT_KEYS=new Set(['petal-pages-v1','damaged-dollhouse-checkin-profile-links-v1']);
+const RAW_KEYS=new Set(['petal-pages-theme','damaged-dollhouse-dashboard-scene-v1','damaged-dollhouse-character-launch-v1','damaged-dollhouse-remembered-workspace-v1']);
+Object.assign(LABELS,{'damaged-dollhouse-dashboard-scene-v1':'Dashboard scene','damaged-dollhouse-character-launch-v1':'Character launch preference','damaged-dollhouse-remembered-workspace-v1':'Remembered workspace'});
 const $=id=>document.getElementById(id);
 const canonical=x=>JSON.stringify(normalize(x));
 function normalize(x){if(Array.isArray(x))return x.map(normalize);if(x&&typeof x==='object'){const o=Object.create(null);Object.keys(x).sort().forEach(k=>Object.defineProperty(o,k,{value:normalize(x[k]),enumerable:true,writable:true,configurable:true}));return o}return x}
-function parsed(raw,key){return raw===null?null:key==='petal-pages-theme'?raw:JSON.parse(raw)}
+function parsed(raw,key){return raw===null?null:RAW_KEYS.has(key)?raw:JSON.parse(raw)}
 function conflictKey(key,id){return JSON.stringify([key,id])}
 let pending=null, backupUrl=null;
 function clearBackup(){if(backupUrl){URL.revokeObjectURL(backupUrl);backupUrl=null}$('mergeBackupReady').hidden=true;$('mergeBackupVerified').checked=false;if(pending){pending.downloaded=false;pending.snapshotFingerprint=null}}
@@ -94,7 +96,7 @@ function prepareDownload(obj){
  $('mergeBackupReady').hidden=false;
 }
 function refresh(){if(!pending)throw Error('Select a backup first');const now=snapshot(),plan=build(pending.incoming,now.items,pending.choices);return {now,plan}}
-function updateButtons(plan){$('mergeSnapshotButton').disabled=!pending||plan.issues.length>0||plan.conflicts.some(c=>!c.choice);$('mergeCommitButton').disabled=$('mergeSnapshotButton').disabled||!pending.downloaded||!$('mergeBackupVerified').checked}
+function updateButtons(plan){$('mergeStepHelp').textContent=plan.issues.length?'Step 2 blocked: '+plan.issues.join('; '):plan.conflicts.some(c=>!c.choice)?'Step 2 blocked: choose a resolution for every conflict below.':!pending.downloaded?'Step 2 is ready. Prepare and save your safety backup.':!$('mergeBackupVerified').checked?'Save the safety backup and check the confirmation box to unlock Step 3.':'Step 3 is ready.';$('mergeSnapshotButton').disabled=!pending||plan.issues.length>0||plan.conflicts.some(c=>!c.choice);$('mergeCommitButton').disabled=$('mergeSnapshotButton').disabled||!pending.downloaded||!$('mergeBackupVerified').checked}
 function render(){const {plan}=refresh(),wrap=$('mergeConflictList');wrap.replaceChildren();
  const holder=$('mergeComparisonResults');holder.replaceChildren();const table=document.createElement('table');table.style.cssText='width:100%;font-size:.9em;text-align:left';
  const header=document.createElement('tr');for(const label of ['Category','Same','Add','Keep existing','Conflicts']){const th=document.createElement('th');th.textContent=label;header.append(th)}table.append(header);
@@ -114,8 +116,8 @@ async function select(e){clearBackup();pending=null;$('mergeConflictList').repla
  try{const f=e.target.files?.[0];if(!f)return;if(f.size>40*1024*1024)throw Error('Backup exceeds 40 MB');const raw=JSON.parse(await f.text()),validated=window.DollhouseValidateUnifiedBackup(raw),incoming={...validated.items};for(const key of KEYS)if(!Object.prototype.hasOwnProperty.call(incoming,key))delete incoming[key];pending={incoming,choices:{},downloaded:false};render()}
  catch(err){pending=null;say('⚠ '+err.message)}finally{e.target.value=''}
 }
-function saveSnapshot(){if(!pending)return;try{const {now,plan}=refresh();if(plan.issues.length||plan.conflicts.some(c=>!c.choice))throw Error('Resolve all conflicts first');clearBackup();prepareDownload(now);pending.downloaded=true;pending.snapshotFingerprint=JSON.stringify(now.items);updateButtons(plan);say('Safety backup is ready. Tap the Save PRE-MERGE backup file link, verify it saved, then check the confirmation box to enable merging. Nothing has changed.')}catch(e){say('⚠ '+e.message)}}
-function commit(){if(!pending||!pending.downloaded)return;
+function saveSnapshot(){if(!pending)return;try{const {now,plan}=refresh();if(plan.issues.length||plan.conflicts.some(c=>!c.choice))throw Error('Resolve all conflicts first');clearBackup();prepareDownload(now);pending.downloaded=true;pending.snapshotFingerprint=JSON.stringify(now.items);updateButtons(plan);say('Safety backup is ready. Tap the Save PRE-MERGE backup file link, verify it saved, then check the confirmation box to enable merging. Nothing has changed.');try{$('mergeBackupLink').click()}catch(_){} }catch(e){say('⚠ '+e.message)}}
+function commit(){if(!pending||!pending.downloaded||!$('mergeBackupVerified').checked)return;
  try{const {now,plan}=refresh();if(plan.issues.length||plan.conflicts.some(c=>!c.choice))throw Error('Merge blocked: unresolved conflicts or invalid records');if(plan.issues.length===0){
   const candidate={format:'damaged-dollhouse-unified-v4',items:{...now.items,...plan.output}};
   window.DollhouseValidateUnifiedBackup(candidate);
